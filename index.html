@@ -247,6 +247,7 @@
       <div class="dz-fname" id="fname-hhYest"></div>
     </div>
   </div>
+
 </div>
 
 <div class="controls">
@@ -262,6 +263,25 @@
 <script>
 // ── State ──────────────────────────────────────────────────────────────
 const data = { dToday: null, dYest: null, hhToday: null, hhYest: null };
+
+// Auto-fetched climatology — loaded on page startup
+const CLIMO_URL = 'https://raw.githubusercontent.com/2manytims/nem-temp-table/main/monthly_climatology_10yr.csv';
+let climoData = null;
+
+async function loadClimatology() {
+  try {
+    const res = await fetch(CLIMO_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    climoData = parseClimoCSV(text);
+    console.log('Climatology loaded:', climoData);
+  } catch(err) {
+    console.warn('Climatology fetch failed, using hardcoded fallback:', err.message);
+    climoData = null;
+  }
+}
+
+loadClimatology();
 
 // ── Climatology (1991-2020) ────────────────────────────────────────────
 // Values visible from screenshots: Tmax, 1-in-10, Td, CDD per city
@@ -299,6 +319,99 @@ const TD_SCALE = {
 };
 
 const CITIES = ['Adelaide WT', 'Melbourne OP', 'Bankstown', 'Archerfield'];
+
+// ── Climatology CSV parser ─────────────────────────────────────────────
+// CSV has two side-by-side tables: Monthly mean Maxs (cols 0-4) and
+// Monthly mean Mins (cols 7-11), with city order: Adelaide, Archerfield, Bankstown, Melbourne
+// City mapping from CSV names to table names
+const CLIMO_CITY_MAP = {
+  'Adelaide':   'Adelaide WT',
+  'Melbourne':  'Melbourne OP',
+  'Bankstown':  'Bankstown',
+  'Archerfield':'Archerfield',
+};
+
+function parseClimoCSV(text) {
+  // Returns { month: { 'Adelaide WT': { tmax, tmin }, ... }, recordPeriod: '2017-2026' }
+  const lines = text.trim().split('\n').map(l => splitLine(l).map(v => v.trim()));
+
+  // Find the header row for Maxs (contains 'month' and city names)
+  let maxHeaderIdx = -1, minHeaderIdx = -1;
+  let maxCities = [], minCities = [];
+  let minOffset = 0;
+  let recordPeriod = '';
+
+  for (let i = 0; i < lines.length; i++) {
+    const row = lines[i];
+    if (row[0].toLowerCase() === 'month' && row[1]) {
+      if (maxHeaderIdx === -1) {
+        maxHeaderIdx = i;
+        maxCities = row.slice(1, 5).filter(Boolean);
+        // Find where min section starts (look for 'month' later in same row)
+        for (let c = 5; c < row.length; c++) {
+          if (row[c].toLowerCase() === 'month') {
+            minOffset = c;
+            minCities = row.slice(c + 1, c + 5).filter(Boolean);
+            break;
+          }
+        }
+      }
+    }
+    if (row[0].toLowerCase().startsWith('record')) {
+      recordPeriod = row[1] || '';
+    }
+  }
+
+  if (maxHeaderIdx === -1) return null;
+
+  const MONTHS = ['january','february','march','april','may','june',
+                  'july','august','september','october','november','december'];
+
+  const result = { byMonth: {}, recordPeriod };
+
+  for (let i = maxHeaderIdx + 1; i < lines.length; i++) {
+    const row = lines[i];
+    const monthName = (row[0] || '').toLowerCase();
+    const mIdx = MONTHS.indexOf(monthName);
+    if (mIdx === -1) continue;
+
+    const entry = {};
+    maxCities.forEach((city, j) => {
+      const mapped = CLIMO_CITY_MAP[city] || city;
+      if (!entry[mapped]) entry[mapped] = {};
+      entry[mapped].tmax = parseFloat(row[j + 1]);
+    });
+    if (minOffset > 0) {
+      minCities.forEach((city, j) => {
+        const mapped = CLIMO_CITY_MAP[city] || city;
+        if (!entry[mapped]) entry[mapped] = {};
+        entry[mapped].tmin = parseFloat(row[minOffset + j + 1]);
+      });
+    }
+    result.byMonth[mIdx] = entry; // 0 = January
+  }
+
+  return result;
+}
+
+function getClimoForMonth(climoData, monthIdx) {
+  // Returns per-city { tmax, cdd } for the given month (0-based)
+  // Falls back to hardcoded CLIMO if data missing
+  if (!climoData || !climoData.byMonth[monthIdx]) return null;
+  const month = climoData.byMonth[monthIdx];
+  const result = {};
+  for (const city of CITIES) {
+    const c = month[city] || {};
+    const tmax = isNaN(c.tmax) ? CLIMO[city].tmax : Math.round(c.tmax * 10) / 10;
+    const tmin = isNaN(c.tmin) ? null : c.tmin;
+    const cddVal = (tmin !== null && !isNaN(c.tmax))
+      ? ((c.tmin + c.tmax) / 2 - 18)
+      : null;
+    const cdd = (cddVal === null || cddVal <= 0.5) ? '-' : Math.round(cddVal);
+    result[city] = { tmax, cdd };
+  }
+  return result;
+}
 
 // ── CSV parser ─────────────────────────────────────────────────────────
 function parseCSV(text) {
@@ -462,7 +575,7 @@ function tdBg(val, city) {
 }
 
 // ── Build table HTML ───────────────────────────────────────────────────
-function buildTable(dailyToday, dailyYest, hhTodayRows, hhYestRows) {
+function buildTable(dailyToday, dailyYest, hhTodayRows, hhYestRows, climoData) {
   const hhLookup = buildHHLookup(hhTodayRows);
 
   // Build yesterday's tmax lookup: date string → { city: tmax }
@@ -477,8 +590,18 @@ function buildTable(dailyToday, dailyYest, hhTodayRows, hhYestRows) {
     }
   }
 
-  // Today's rows sorted by date
+  // Today's rows
   const rows = dailyToday.filter(r => r['Date']);
+
+  // Determine month from first data row
+  const firstDate = rows[0] ? parseDMY(rows[0]['Date']) : new Date();
+  const monthIdx  = firstDate.getMonth(); // 0-based
+
+  // Get climatology values — dynamic if CSV loaded, else hardcoded fallback
+  const climoMonth = getClimoForMonth(climoData, monthIdx);
+  const climoLabel = climoData
+    ? `Climatology (${climoData.recordPeriod || '10yr'})`
+    : 'Climatology (1991-2020)';
 
   let html = `<table class="temp-table">`;
 
@@ -552,17 +675,19 @@ function buildTable(dailyToday, dailyYest, hhTodayRows, hhYestRows) {
     html += `</tr>`;
   }
 
-  // Climatology row
+  // Climatology row — dynamic from CSV if loaded, else hardcoded fallback
   html += `<tr class="climo-row">`;
-  html += `<td class="climo-label">Climatology (1991-2020)</td>`;
+  html += `<td class="climo-label">${climoLabel}</td>`;
   for (const city of CITIES) {
-    const c = CLIMO[city];
-    html += `<td class="td-tmax"><em>${c.tmax}</em></td>`;
+    const fallback = CLIMO[city];
+    const tmax  = climoMonth ? climoMonth[city].tmax  : fallback.tmax;
+    const cdd   = climoMonth ? climoMonth[city].cdd   : fallback.cdd;
+    html += `<td class="td-tmax"><em>${tmax}</em></td>`;
     html += `<td></td>`;
-    html += `<td>${c.tin10}</td>`;
+    html += `<td>${fallback.tin10}</td>`;
     html += `<td></td>`;
-    html += `<td class="td-td">${c.td}</td>`;
-    html += `<td>${c.cdd}</td>`;
+    html += `<td class="td-td">${fallback.td}</td>`;
+    html += `<td>${cdd}</td>`;
   }
   html += `</tr>`;
 
@@ -580,7 +705,7 @@ function generate() {
     const dailyYest  = parseCSV(data.dYest);
     const hhToday    = parseCSV(data.hhToday);
 
-    const tableHTML = buildTable(dailyToday, dailyYest, hhToday, []);
+    const tableHTML = buildTable(dailyToday, dailyYest, hhToday, [], climoData);
 
     const container = document.getElementById('tableContainer');
     container.innerHTML = tableHTML;
