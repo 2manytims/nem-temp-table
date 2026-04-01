@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NEM Temperature Table</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #181c27;
+      --border: #252a38;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --accent: #3b82f6;
+      --green: #22c55e;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px 24px 60px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand { display: flex; flex-direction: column; gap: 4px; }
+    .brand-label { font-size: 0.68rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+    .brand-title { font-size: 1.4rem; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
+    .brand-sub { font-size: 0.82rem; color: var(--muted); }
+
+    /* ── Upload panel ── */
+    .upload-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 28px;
+      max-width: 900px;
+    }
+    @media (max-width: 640px) { .upload-panel { grid-template-columns: 1fr; } }
+
+    .drop-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      transition: border-color 0.2s;
+    }
+    .drop-card.drag-over { border-color: var(--accent); }
+    .drop-card.loaded    { border-color: var(--green); }
+
+    .drop-card .label {
+      font-size: 0.68rem; font-weight: 600; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace; margin-bottom: 8px;
+    }
+    .drop-card .label span { color: var(--accent); }
+    .drop-card .label span.yest { color: #f472b6; }
+
+    .drop-zone {
+      border: 1.5px dashed #2d3748;
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s;
+      background: #0f1117;
+    }
+    .drop-zone:hover { border-color: var(--accent); background: #131929; }
+    .drop-zone.loaded { border-color: var(--green); border-style: solid; }
+    .drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .drop-zone .dz-icon { font-size: 1.3rem; margin-bottom: 4px; }
+    .drop-zone .dz-hint { font-size: 0.78rem; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+    .drop-zone .dz-fname { font-size: 0.78rem; color: var(--green); font-family: 'IBM Plex Mono', monospace; display: none; }
+    .drop-zone.loaded .dz-hint { display: none; }
+    .drop-zone.loaded .dz-fname { display: block; }
+
+    /* ── Controls ── */
+    .controls {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 24px; flex-wrap: wrap;
+    }
+
+    .btn-generate {
+      padding: 10px 28px;
+      background: var(--accent);
+      color: white; border: none; border-radius: 8px;
+      font-size: 0.9rem; font-weight: 600;
+      font-family: 'IBM Plex Sans', sans-serif;
+      cursor: pointer; transition: background 0.2s; letter-spacing: 0.2px;
+    }
+    .btn-generate:hover:not(:disabled) { background: #2563eb; }
+    .btn-generate:disabled { background: #1e2d45; color: #3d5a80; cursor: not-allowed; }
+
+    .btn-copy {
+      padding: 10px 20px;
+      background: transparent;
+      color: var(--muted); border: 1px solid var(--border); border-radius: 8px;
+      font-size: 0.88rem; font-weight: 600;
+      font-family: 'IBM Plex Sans', sans-serif;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .btn-copy:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-copy.copied { border-color: var(--green); color: var(--green); }
+
+    .status-msg {
+      font-size: 0.82rem; font-family: 'IBM Plex Mono', monospace;
+      padding: 8px 14px; border-radius: 6px; display: none;
+    }
+    .status-msg.error   { display:block; background:#2d0f0f; color:#f87171; border:1px solid #7f1d1d; }
+    .status-msg.success { display:block; background:#0d2318; color:#4ade80; border:1px solid #14532d; }
+
+    /* ── Output wrapper ── */
+    .output-wrapper {
+      overflow-x: auto;
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      display: none;
+    }
+    .output-wrapper.visible { display: block; }
+
+    /* ── THE TABLE ── */
+    .temp-table {
+      border-collapse: collapse;
+      font-family: Calibri, 'Segoe UI', Arial, sans-serif;
+      font-size: 9pt;
+      white-space: nowrap;
+      color: #000;
+    }
+
+    .temp-table th, .temp-table td {
+      padding: 2px 6px;
+      border: 1px solid #bfbfbf;
+      text-align: center;
+    }
+
+    .temp-table .th-title {
+      background: #fff;
+      font-weight: 700;
+      font-size: 10pt;
+      text-align: left;
+      border: none;
+      padding-bottom: 4px;
+    }
+
+    .temp-table .th-city {
+      background: #dce6f1;
+      font-weight: 700;
+      font-size: 9pt;
+    }
+
+    .temp-table .th-col {
+      background: #dce6f1;
+      font-size: 8pt;
+      font-weight: 400;
+    }
+
+    .temp-table .th-tmax { color: #c00000; font-style: italic; font-weight: 700; }
+    .temp-table .th-td   { color: #375623; font-weight: 400; }
+
+    .temp-table .td-date {
+      text-align: left;
+      background: #f2f2f2;
+      font-weight: 400;
+      padding-left: 8px;
+    }
+
+    .temp-table .td-tmax { color: #c00000; font-style: italic; font-weight: 700; }
+    .temp-table .td-td   { color: #375623; }
+
+    .temp-table .climo-row td {
+      background: #f2f2f2;
+      font-style: italic;
+      color: #595959;
+    }
+    .temp-table .climo-row .td-tmax { color: #c00000; font-style: italic; }
+    .temp-table .climo-row .td-td   { color: #375623; font-style: italic; }
+    .temp-table .climo-label {
+      text-align: left;
+      padding-left: 8px;
+      font-style: italic;
+    }
+    .temp-table .td-dash { color: #595959; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-label">MetraNotes // NEM Forecast</div>
+    <div class="brand-title">Temperature Table Generator</div>
+    <div class="brand-sub">Drop today's and yesterday's CSVs — get a table ready to paste.</div>
+  </div>
+</header>
+
+<!-- Upload panel -->
+<div class="upload-panel">
+  <div class="drop-card" id="card-dToday">
+    <div class="label"><span>Today</span> — Daily CSV</div>
+    <div class="drop-zone" id="zone-dToday">
+      <input type="file" id="input-dToday" accept=".csv"/>
+      <div class="dz-icon">📄</div>
+      <div class="dz-hint">renewables_forecast_daily_TODAY.csv</div>
+      <div class="dz-fname" id="fname-dToday"></div>
+    </div>
+  </div>
+
+  <div class="drop-card" id="card-dYest">
+    <div class="label"><span class="yest">Yesterday</span> — Daily CSV</div>
+    <div class="drop-zone" id="zone-dYest">
+      <input type="file" id="input-dYest" accept=".csv"/>
+      <div class="dz-icon">📄</div>
+      <div class="dz-hint">renewables_forecast_daily_YESTERDAY.csv</div>
+      <div class="dz-fname" id="fname-dYest"></div>
+    </div>
+  </div>
+
+  <div class="drop-card" id="card-hhToday">
+    <div class="label"><span>Today</span> — Half-Hourly CSV</div>
+    <div class="drop-zone" id="zone-hhToday">
+      <input type="file" id="input-hhToday" accept=".csv"/>
+      <div class="dz-icon">📄</div>
+      <div class="dz-hint">renewables_forecast_halfhourly_TODAY.csv</div>
+      <div class="dz-fname" id="fname-hhToday"></div>
+    </div>
+  </div>
+
+  <div class="drop-card" id="card-hhYest">
+    <div class="label"><span class="yest">Yesterday</span> — Half-Hourly CSV</div>
+    <div class="drop-zone" id="zone-hhYest">
+      <input type="file" id="input-hhYest" accept=".csv"/>
+      <div class="dz-icon">📄</div>
+      <div class="dz-hint">renewables_forecast_halfhourly_YESTERDAY.csv</div>
+      <div class="dz-fname" id="fname-hhYest"></div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn-generate" id="genBtn" disabled onclick="generate()">Generate Table</button>
+  <button class="btn-copy" id="copyBtn" style="display:none" onclick="copyTable()">Copy Table</button>
+  <div class="status-msg" id="statusMsg"></div>
+</div>
+
+<div class="output-wrapper" id="outputWrapper">
+  <div id="tableContainer"></div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────
+const data = { dToday: null, dYest: null, hhToday: null, hhYest: null };
+
+// ── Climatology (1991-2020) ────────────────────────────────────────────
+// Values visible from screenshots: Tmax, 1-in-10, Td, CDD per city
+const CLIMO = {
+  'Adelaide WT':  { tmax: 24, tin10: 29, td: 9,  cdd: 2 },
+  'Melbourne OP': { tmax: 21, tin10: 27, td: 9,  cdd: 1 },
+  'Bankstown':    { tmax: 25, tin10: 28, td: 13, cdd: 2 },
+  'Archerfield':  { tmax: 28, tin10: 30, td: 15, cdd: 4 },
+};
+
+// ── CSV column mappings ────────────────────────────────────────────────
+// Daily CSV columns (0-indexed)
+const DAILY_COLS = {
+  'Adelaide WT':  { tmin: 1,  tmax: 2,  tmax90: 3  },
+  'Melbourne OP': { tmin: 7,  tmax: 8,  tmax90: 9  },
+  'Bankstown':    { tmin: 13, tmax: 14, tmax90: 15 },
+  'Archerfield':  { tmin: 28, tmax: 29, tmax90: 30 },
+};
+
+// Half-hourly CSV columns (0-indexed)
+// TT and DPD pairs per station
+const HH_COLS = {
+  'Adelaide WT':  { tt: 1,  dpd: 2  },
+  'Melbourne OP': { tt: 5,  dpd: 6  },
+  'Bankstown':    { tt: 9,  dpd: 10 },
+  'Archerfield':  { tt: 19, dpd: 20 },
+};
+
+// Td green scale ranges per city
+const TD_SCALE = {
+  'Adelaide WT':  { min: 15, max: 25 },
+  'Melbourne OP': { min: 15, max: 25 },
+  'Bankstown':    { min: 20, max: 30 },
+  'Archerfield':  { min: 20, max: 30 },
+};
+
+const CITIES = ['Adelaide WT', 'Melbourne OP', 'Bankstown', 'Archerfield'];
+
+// ── CSV parser ─────────────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = splitLine(lines[0]);
+  return lines.slice(1).filter(l => l.trim()).map(l => {
+    const vals = splitLine(l);
+    const obj = {};
+    headers.forEach((h, i) => obj[h.trim()] = vals[i] ? vals[i].trim() : '');
+    return obj;
+  });
+}
+
+function splitLine(line) {
+  const res = []; let cur = '', inQ = false;
+  for (const ch of line) {
+    if (ch === '"') inQ = !inQ;
+    else if (ch === ',' && !inQ) { res.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  res.push(cur);
+  return res;
+}
+
+// ── Date helpers ───────────────────────────────────────────────────────
+function parseDMY(str) {
+  // Handles DD/MM/YYYY and DD/MM/YYYY HH:MM
+  const [datePart] = str.trim().split(' ');
+  const [d, m, y] = datePart.split('/').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function dateSerial(date) {
+  const epoch = new Date(1899, 11, 30);
+  return Math.round((date - epoch) / 86400000);
+}
+
+function formatDate(dateStr) {
+  const d = parseDMY(dateStr);
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${days[d.getDay()]} ${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// ── Parse half-hourly into a lookup by datetime serial ─────────────────
+function buildHHLookup(hhRows) {
+  // Returns Map: serial_float -> row object
+  const map = new Map();
+  for (const row of hhRows) {
+    const dtStr = row['DateTime (AEST)'];
+    if (!dtStr) continue;
+    const [datePart, timePart] = dtStr.trim().split(' ');
+    const [d, mo, y] = datePart.split('/').map(Number);
+    const date = new Date(y, mo - 1, d);
+    const serial = dateSerial(date);
+    const [h, m] = (timePart || '00:00').split(':').map(Number);
+    const key = serial + (h * 60 + m) / 1440;
+    map.set(Math.round(key * 10000) / 10000, row);
+  }
+  return map;
+}
+
+function hhKey(serial, h, m) {
+  return Math.round((serial + (h * 60 + m) / 1440) * 10000) / 10000;
+}
+
+// ── Computations ───────────────────────────────────────────────────────
+function calcT6pm(tmax, dateSerial_, hhLookup, city) {
+  const cols = HH_COLS[city];
+  // Rows 36-38 relative to day start = 17:30, 18:00, 18:30 (0-based from midnight)
+  // Row 2 = 00:30 start, row index 35 = 17:30, 36 = 18:00, 37 = 18:30
+  // Actually: row 0 of hh data = 00:00, so:
+  // 17:30 = row 35, 18:00 = row 36, 18:30 = row 37
+  // Full day rows 0-47
+  const win6pm = [
+    getHHVal(hhLookup, hhKey(dateSerial_, 17, 30), cols.tt),
+    getHHVal(hhLookup, hhKey(dateSerial_, 18, 0),  cols.tt),
+    getHHVal(hhLookup, hhKey(dateSerial_, 18, 30), cols.tt),
+  ].filter(v => v !== null);
+
+  const allDay = [];
+  for (let h = 0; h < 24; h++) {
+    for (const m of [0, 30]) {
+      const v = getHHVal(hhLookup, hhKey(dateSerial_, h, m), cols.tt);
+      if (v !== null) allDay.push(v);
+    }
+  }
+
+  if (!win6pm.length || !allDay.length) return tmax;
+
+  const max6pm  = Math.max(...win6pm);
+  const maxDay  = Math.max(...allDay);
+  const val6pm  = getHHVal(hhLookup, hhKey(dateSerial_, 18, 0), cols.tt);
+
+  if (max6pm === maxDay) return tmax;
+  if (val6pm !== null && Math.round(val6pm) > tmax) return tmax - 0.5;
+  return val6pm !== null ? round1(val6pm) : tmax;
+}
+
+function getHHVal(lookup, key, colIdx) {
+  // colIdx is 0-based; lookup stores full row objects keyed by header
+  const headers = Object.keys(lookup.values().next().value || {});
+  if (!headers.length) return null;
+  const row = lookup.get(key);
+  if (!row) return null;
+  const val = Object.values(row)[colIdx];
+  if (val === '*' || val === '' || val === undefined) return null;
+  return parseFloat(val);
+}
+
+function calcTd(dateSerial_, hhLookup, city) {
+  const cols = HH_COLS[city];
+  const vals = [14, 15, 16].map(h => {
+    const tt  = getHHVal(hhLookup, hhKey(dateSerial_, h, 0), cols.tt);
+    const dpd = getHHVal(hhLookup, hhKey(dateSerial_, h, 0), cols.dpd);
+    if (tt === null || dpd === null) return null;
+    return tt - dpd;
+  }).filter(v => v !== null);
+
+  if (!vals.length) return null;
+  return round1(vals.reduce((a, b) => a + b, 0) / vals.length);
+}
+
+function calcCDD(tmin, tmax) {
+  const val = (tmin + tmax) / 2 - 18;
+  return val <= 0.5 ? '-' : round1(val);
+}
+
+function round1(v) { return Math.round(v * 10) / 10; }
+
+// ── Colour interpolation ───────────────────────────────────────────────
+function lerpColor(c1, c2, t) {
+  t = Math.max(0, Math.min(1, t));
+  const r1 = parseInt(c1.slice(1,3),16), g1 = parseInt(c1.slice(3,5),16), b1 = parseInt(c1.slice(5,7),16);
+  const r2 = parseInt(c2.slice(1,3),16), g2 = parseInt(c2.slice(3,5),16), b2 = parseInt(c2.slice(5,7),16);
+  const r = Math.round(r1 + (r2-r1)*t);
+  const g = Math.round(g1 + (g2-g1)*t);
+  const b = Math.round(b1 + (b2-b1)*t);
+  return `rgb(${r},${g},${b})`;
+}
+
+// 3-colour scale: white(32) → yellow(35) → pink/red(45)
+function tempBg(val) {
+  if (typeof val !== 'number') return '';
+  if (val <= 32) return '';
+  if (val <= 35) {
+    const t = (val - 32) / (35 - 32);
+    return lerpColor('#ffffff', '#ffff00', t);
+  }
+  const t = (val - 35) / (45 - 35);
+  return lerpColor('#ffff00', '#ff6666', t);
+}
+
+// 2-colour green scale
+function tdBg(val, city) {
+  if (typeof val !== 'number') return '';
+  const { min, max } = TD_SCALE[city];
+  if (val <= min) return '';
+  const t = Math.min(1, (val - min) / (max - min));
+  return lerpColor('#ffffff', '#63be7b', t);
+}
+
+// ── Build table HTML ───────────────────────────────────────────────────
+function buildTable(dailyToday, dailyYest, hhTodayRows, hhYestRows) {
+  const hhLookup = buildHHLookup(hhTodayRows);
+
+  // Build yesterday's tmax lookup: date string → { city: tmax }
+  const yesterdayTmax = {};
+  for (const row of dailyYest) {
+    const d = row['Date'];
+    if (!d) continue;
+    yesterdayTmax[d] = {};
+    for (const city of CITIES) {
+      const cols = DAILY_COLS[city];
+      yesterdayTmax[d][city] = parseFloat(Object.values(row)[cols.tmax]) || null;
+    }
+  }
+
+  // Today's rows sorted by date
+  const rows = dailyToday.filter(r => r['Date']);
+
+  let html = `<table class="temp-table">`;
+
+  // Title row
+  html += `<tr><td class="th-title" colspan="${1 + CITIES.length * 6}">Temperatures</td></tr>`;
+
+  // City header row
+  html += `<tr><th class="th-col td-date"></th>`;
+  for (const city of CITIES) {
+    html += `<th class="th-city" colspan="6">${city}</th>`;
+  }
+  html += `</tr>`;
+
+  // Column header row
+  html += `<tr><th class="th-col td-date">Date</th>`;
+  for (const city of CITIES) {
+    html += `<th class="th-col th-tmax"><em>Tmax</em></th>`;
+    html += `<th class="th-col">ΔTmax</th>`;
+    html += `<th class="th-col">1-in-10</th>`;
+    html += `<th class="th-col">T6pm</th>`;
+    html += `<th class="th-col th-td">Td</th>`;
+    html += `<th class="th-col">CDD</th>`;
+  }
+  html += `</tr>`;
+
+  // Data rows
+  for (const row of rows) {
+    const vals = Object.values(row);
+    const dateStr = row['Date'];
+    const dateObj = parseDMY(dateStr);
+    const serial  = dateSerial(dateObj);
+
+    html += `<tr>`;
+    html += `<td class="td-date">${formatDate(dateStr)}</td>`;
+
+    for (const city of CITIES) {
+      const cols  = DAILY_COLS[city];
+      const tmin  = parseFloat(vals[cols.tmin]);
+      const tmax  = parseFloat(vals[cols.tmax]);
+      const tin10 = parseFloat(vals[cols.tmax90]);
+
+      // ΔTmax: today's tmax minus yesterday's tmax for same date
+      let deltaTmax = null;
+      // Find yesterday's row with same date
+      const yesterdayRow = dailyYest.find(r => r['Date'] === dateStr);
+      if (yesterdayRow) {
+        const yVals = Object.values(yesterdayRow);
+        const yTmax = parseFloat(yVals[cols.tmax]);
+        if (!isNaN(yTmax) && !isNaN(tmax)) deltaTmax = round1(tmax - yTmax);
+      }
+
+      const t6pm = calcT6pm(tmax, serial, hhLookup, city);
+      const td   = calcTd(serial, hhLookup, city);
+      const cdd  = calcCDD(tmin, tmax);
+
+      const tmaxBg  = tempBg(tmax);
+      const t6pmBg  = tempBg(t6pm);
+      const tin10Bg = tempBg(tin10);
+      const tdBgCol = td !== null ? tdBg(td, city) : '';
+
+      const deltaBold = deltaTmax !== null && Math.abs(deltaTmax) > 1 ? 'font-weight:700;' : '';
+      const deltaFmt  = deltaTmax !== null ? deltaTmax.toFixed(1) : '—';
+
+      html += `<td class="td-tmax" style="background:${tmaxBg}">${isNaN(tmax)?'—':tmax.toFixed(1)}</td>`;
+      html += `<td style="${deltaBold}">${deltaFmt}</td>`;
+      html += `<td style="background:${tin10Bg}">${isNaN(tin10)?'—':Math.round(tin10)}</td>`;
+      html += `<td style="background:${t6pmBg}">${isNaN(t6pm)?'—':Math.round(t6pm)}</td>`;
+      html += `<td class="td-td" style="background:${tdBgCol}">${td !== null ? Math.round(td) : '—'}</td>`;
+      html += `<td class="td-dash">${cdd === '-' ? '-' : Math.round(cdd)}</td>`;
+    }
+    html += `</tr>`;
+  }
+
+  // Climatology row
+  html += `<tr class="climo-row">`;
+  html += `<td class="climo-label">Climatology (1991-2020)</td>`;
+  for (const city of CITIES) {
+    const c = CLIMO[city];
+    html += `<td class="td-tmax"><em>${c.tmax}</em></td>`;
+    html += `<td></td>`;
+    html += `<td>${c.tin10}</td>`;
+    html += `<td></td>`;
+    html += `<td class="td-td">${c.td}</td>`;
+    html += `<td>${c.cdd}</td>`;
+  }
+  html += `</tr>`;
+
+  html += `</table>`;
+  return html;
+}
+
+// ── Generate ───────────────────────────────────────────────────────────
+function generate() {
+  const msg = document.getElementById('statusMsg');
+  msg.className = 'status-msg';
+
+  try {
+    const dailyToday = parseCSV(data.dToday);
+    const dailyYest  = parseCSV(data.dYest);
+    const hhToday    = parseCSV(data.hhToday);
+
+    const tableHTML = buildTable(dailyToday, dailyYest, hhToday, []);
+
+    const container = document.getElementById('tableContainer');
+    container.innerHTML = tableHTML;
+
+    const wrapper = document.getElementById('outputWrapper');
+    wrapper.classList.add('visible');
+
+    document.getElementById('copyBtn').style.display = 'inline-block';
+
+    msg.className = 'status-msg success';
+    msg.textContent = `✓ Table generated — ${dailyToday.length} rows`;
+
+    wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch(err) {
+    msg.className = 'status-msg error';
+    msg.textContent = '✗ ' + err.message;
+    console.error(err);
+  }
+}
+
+// ── Copy table for email paste ─────────────────────────────────────────
+function copyTable() {
+  const table = document.querySelector('.temp-table');
+  if (!table) return;
+
+  const btn = document.getElementById('copyBtn');
+
+  // Use clipboard API with HTML
+  const blob = new Blob([table.outerHTML], { type: 'text/html' });
+  const item = new ClipboardItem({ 'text/html': blob });
+  navigator.clipboard.write([item]).then(() => {
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Copy Table';
+      btn.classList.remove('copied');
+    }, 2000);
+  }).catch(() => {
+    // Fallback: select and copy
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(table);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    document.execCommand('copy');
+    sel.removeAllRanges();
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy Table'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+// ── Wire drop zones ────────────────────────────────────────────────────
+[
+  { key: 'dToday',  zoneId: 'zone-dToday',  inputId: 'input-dToday'  },
+  { key: 'dYest',   zoneId: 'zone-dYest',   inputId: 'input-dYest'   },
+  { key: 'hhToday', zoneId: 'zone-hhToday', inputId: 'input-hhToday' },
+  { key: 'hhYest',  zoneId: 'zone-hhYest',  inputId: 'input-hhYest'  },
+].forEach(({ key, zoneId, inputId }) => {
+  const zone  = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+
+  function load(file) {
+    const r = new FileReader();
+    r.onload = e => {
+      data[key] = e.target.result;
+      zone.classList.add('loaded');
+      document.getElementById('fname-' + key).textContent = file.name;
+      checkReady();
+    };
+    r.readAsText(file);
+  }
+
+  input.addEventListener('change', () => { if (input.files[0]) load(input.files[0]); });
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]);
+  });
+});
+
+function checkReady() {
+  document.getElementById('genBtn').disabled = !(data.dToday && data.dYest && data.hhToday);
+}
+</script>
+</body>
+</html>
