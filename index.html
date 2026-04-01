@@ -252,7 +252,7 @@
 
 <div class="controls">
   <button class="btn-generate" id="genBtn" disabled onclick="generate()">Generate Table</button>
-  <button class="btn-copy" id="copyBtn" style="display:none" onclick="copyTable()">Copy Table</button>
+  <button class="btn-copy" id="copyBtn" style="display:none" onclick="copyTable()">Save as Image</button>
   <div class="status-msg" id="statusMsg"></div>
 </div>
 
@@ -260,6 +260,7 @@
   <div id="tableContainer"></div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 // ── State ──────────────────────────────────────────────────────────────
 const data = { dToday: null, dYest: null, hhToday: null, hhYest: null };
@@ -727,36 +728,52 @@ function generate() {
   }
 }
 
-// ── Copy table for email paste ─────────────────────────────────────────
-function copyTable() {
+// ── Save table as image ────────────────────────────────────────────────
+async function copyTable() {
   const table = document.querySelector('.temp-table');
   if (!table) return;
 
   const btn = document.getElementById('copyBtn');
+  btn.textContent = '⏳ Rendering…';
+  btn.disabled = true;
 
-  // Use clipboard API with HTML
-  const blob = new Blob([table.outerHTML], { type: 'text/html' });
-  const item = new ClipboardItem({ 'text/html': blob });
-  navigator.clipboard.write([item]).then(() => {
-    btn.textContent = '✓ Copied!';
+  try {
+    // Wrap table in a padded white container for the screenshot
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display:inline-block; padding:16px; background:white; font-family:Calibri,Arial,sans-serif;';
+    const clone = table.cloneNode(true);
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
+    const canvas = await html2canvas(wrapper, {
+      backgroundColor: '#ffffff',
+      scale: 2,           // retina quality
+      useCORS: true,
+      logging: false,
+    });
+
+    document.body.removeChild(wrapper);
+
+    // Download as PNG
+    const link = document.createElement('a');
+    const today = new Date().toISOString().slice(0, 10);
+    link.download = `temp_table_${today}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+
+    btn.textContent = '✓ Saved!';
     btn.classList.add('copied');
     setTimeout(() => {
-      btn.textContent = 'Copy Table';
+      btn.textContent = 'Save as Image';
       btn.classList.remove('copied');
+      btn.disabled = false;
     }, 2000);
-  }).catch(() => {
-    // Fallback: select and copy
-    const sel = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(table);
-    sel.removeAllRanges();
-    sel.addRange(range);
-    document.execCommand('copy');
-    sel.removeAllRanges();
-    btn.textContent = '✓ Copied!';
-    btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'Copy Table'; btn.classList.remove('copied'); }, 2000);
-  });
+
+  } catch(err) {
+    console.error(err);
+    btn.textContent = 'Save as Image';
+    btn.disabled = false;
+  }
 }
 
 // ── Wire drop zones ────────────────────────────────────────────────────
