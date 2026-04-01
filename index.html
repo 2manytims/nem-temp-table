@@ -591,8 +591,8 @@ function buildTable(dailyToday, dailyYest, hhTodayRows, hhYestRows, climoData) {
     }
   }
 
-  // Today's rows
-  const rows = dailyToday.filter(r => r['Date']);
+  // Today's rows — drop the last one as it falls outside yesterday's forecast window
+  const rows = dailyToday.filter(r => r['Date']).slice(0, -1);
 
   // Determine month from first data row
   const firstDate = rows[0] ? parseDMY(rows[0]['Date']) : new Date();
