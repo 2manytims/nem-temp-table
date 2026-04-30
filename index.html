@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NEM Forecast Tables</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    :root {
+      --bg:#0a1628; --navy:#0d1f3c; --card:#122040; --card-border:#1e3a6e;
+      --text:#f0f4f8; --muted:#7a9abf; --accent:#00aeef; --accent-dark:#0090c8;
+      --green:#22c55e; --divider:#1a3055;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:0 0 60px;}
+
+    /* ── Header ── */
+    .site-header{background:var(--navy);border-bottom:1px solid var(--divider);padding:0 32px;display:flex;align-items:center;justify-content:space-between;height:64px;}
+    .site-header img{height:28px;display:block;}
+    .team-badge{font-size:0.72rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);padding:4px 12px;border-radius:20px;}
+
+    /* ── Hero ── */
+    .page-hero{background:linear-gradient(135deg,#0d1f3c 0%,#0a2a4a 60%,#0d1f3c 100%);border-bottom:1px solid var(--divider);padding:32px 32px 28px;}
+    .hero-eyebrow{font-size:0.68rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:8px;}
+    .hero-title{font-size:1.75rem;font-weight:700;color:#fff;letter-spacing:-0.5px;margin-bottom:6px;}
+    .hero-sub{font-size:0.88rem;color:var(--muted);}
+
+    .content{padding:28px 32px;}
+
+    /* ── Upload grid ── */
+    .upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;max-width:720px;}
+    @media(max-width:640px){.upload-grid{grid-template-columns:1fr;}}
+
+    .upload-card{background:var(--card);border:1px solid var(--card-border);border-radius:10px;padding:14px;}
+    .upload-card .card-label{font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'Courier New',monospace;margin-bottom:10px;}
+    .upload-card .card-label .today{color:var(--accent);}
+    .upload-card .card-label .yest{color:#f472b6;}
+
+    /* The drop zone — NO input inside it */
+    .drop-zone{
+      border:2px dashed #1e3a6e;
+      border-radius:8px;
+      padding:18px 12px;
+      text-align:center;
+      cursor:pointer;
+      transition:border-color 0.2s, background 0.2s;
+      background:#0a1628;
+      min-height:90px;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+      user-select:none;
+    }
+    .drop-zone:hover{border-color:var(--accent);background:#0d1f3c;}
+    .drop-zone.drag-over{border-color:var(--accent);background:#0d2a40;border-style:solid;}
+    .drop-zone.loaded{border-color:var(--green);background:#071a0f;border-style:solid;}
+    .drop-zone .dz-icon{font-size:1.4rem;pointer-events:none;}
+    .drop-zone .dz-hint{font-size:0.76rem;color:var(--muted);font-family:'Courier New',monospace;pointer-events:none;line-height:1.4;}
+    .drop-zone .dz-fname{font-size:0.76rem;color:var(--green);font-family:'Courier New',monospace;display:none;pointer-events:none;word-break:break-all;padding:0 4px;}
+    .drop-zone.loaded .dz-hint{display:none;}
+    .drop-zone.loaded .dz-fname{display:block;}
+    .drop-zone .dz-browse{font-size:0.72rem;color:var(--accent);pointer-events:none;margin-top:2px;}
+
+    /* Hidden file inputs — outside the drop zones */
+    .hidden-inputs{display:none;}
+
+    /* ── Controls ── */
+    .controls{display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap;}
+    .btn-generate{padding:11px 36px;background:var(--accent);color:#fff;border:none;border-radius:7px;font-size:0.95rem;font-weight:700;cursor:pointer;transition:background 0.2s;}
+    .btn-generate:hover:not(:disabled){background:var(--accent-dark);}
+    .btn-generate:disabled{background:#1a3055;color:#3d6080;cursor:not-allowed;}
+    .status-msg{font-size:0.82rem;font-family:'Courier New',monospace;padding:8px 14px;border-radius:6px;display:none;}
+    .status-msg.error  {display:block;background:#2d0f0f;color:#f87171;border:1px solid #7f1d1d;}
+    .status-msg.success{display:block;background:#0d2318;color:#4ade80;border:1px solid #14532d;}
+
+    /* ── Output sections ── */
+    .output-wrapper{background:white;border-radius:10px;padding:20px 24px 24px;display:none;overflow-x:visible;box-shadow:0 4px 24px rgba(0,0,0,0.4);}
+    .output-wrapper.visible{display:block;}
+    .output-wrapper+.output-wrapper{margin-top:16px;}
+    .section-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #e2e8f0;}
+    .section-label{font-size:0.72rem;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#64748b;}
+    .btn-action{padding:7px 16px;background:#f8fafc;color:#475569;border:1px solid #cbd5e1;border-radius:7px;font-size:0.82rem;font-weight:600;cursor:pointer;transition:all 0.2s;}
+    .btn-action:hover{border-color:#0090c8;color:#0090c8;background:#eff8ff;}
+    .btn-action.done{border-color:#16a34a;color:#15803d;background:#f0fdf4;}
+
+    /* ── Lightning risk table ── */
+    .lt-row td { border:1px solid #000; padding:3px 8px; font-family:Calibri,'Segoe UI',Arial,sans-serif; font-size:9pt; font-weight:700; font-style:italic; color:#000; }
+    .lt-loc { background:#d9d9d9; text-align:center; width:90px; }
+    .lt-risk {
+      width:90px; text-align:center;
+      cursor:pointer; position:relative;
+    }
+    .lt-risk select {
+      position:absolute; inset:0; width:100%; height:100%;
+      opacity:0; cursor:pointer; font-size:9pt;
+    }
+    .lt-detail { width:520px; font-weight:400; }
+    .lt-detail input {
+      border:none; outline:none; width:100%; font-family:Calibri,'Segoe UI',Arial,sans-serif;
+      font-size:9pt; font-style:italic; background:transparent; padding:0; color:#000;
+    }
+    .risk-min  { background:#ffffff; color:#000; }
+    .risk-low  { background:#ffff00; color:#000; }
+    .risk-mod  { background:#ffc000; color:#000; }
+    .risk-high { background:#ff0000; color:#000; }
+    .nem-table{border-collapse:collapse;font-family:Calibri,'Segoe UI',Arial,sans-serif;font-size:9pt;white-space:nowrap;color:#000;}
+    .nem-table th,.nem-table td{padding:2px 6px;border:1px solid #bfbfbf;text-align:center;}
+    .nem-table .th-title{background:#fff;font-weight:700;font-size:10pt;text-align:left;border:none;padding-bottom:4px;}
+    .nem-table .th-region{background:#dce6f1;font-weight:700;font-size:9pt;}
+    .nem-table .th-col{background:#dce6f1;font-size:8pt;font-weight:400;}
+    .nem-table .td-date{text-align:left;background:#f2f2f2;padding-left:8px;}
+    .nem-table .climo-row td{background:#f2f2f2;font-style:italic;color:#595959;}
+    .nem-table .climo-label{text-align:left;padding-left:8px;font-style:italic;}
+    .nem-table .td-tmax{color:#c00000;font-style:italic;font-weight:700;}
+    .nem-table .td-td{color:#375623;}
+    .nem-table .td-tmin-w{color:#c00000;font-style:italic;font-weight:700;}
+    .nem-table .td-tmax-w{color:#c00000;font-style:italic;font-weight:700;}
+    .nem-table .td-wind{color:#375623;font-weight:700;}
+    .nem-table .td-solar{color:#c55a11;font-weight:700;}
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <img src="https://images.squarespace-cdn.com/content/v1/62afd4e6d06b2d565f475581/b9ce004e-90f8-4dad-89da-0a852302074c/MetraWeather+logo+white.png?format=1500w" alt="MetraWeather"/>
+  <span class="team-badge">Australian Consult Team</span>
+</header>
+
+<div class="page-hero">
+  <div class="hero-eyebrow">NEM Energy Forecast</div>
+  <div class="hero-title">Forecast Table Generator</div>
+  <div class="hero-sub">Drop CSVs onto each zone, or click a zone to browse — then hit Generate.</div>
+</div>
+
+<div class="content">
+
+  <!-- Hidden file inputs — kept well away from drop zones -->
+  <div class="hidden-inputs">
+    <input type="file" id="inp-dToday"  accept=".csv"/>
+    <input type="file" id="inp-dYest"   accept=".csv"/>
+    <input type="file" id="inp-hhToday" accept=".csv"/>
+    <input type="file" id="inp-hhYest"  accept=".csv"/>
+  </div>
+
+  <div class="upload-grid">
+    <div class="upload-card">
+      <div class="card-label"><span class="today">Today</span> — Daily CSV</div>
+      <div class="drop-zone" id="dz-dToday">
+        <div class="dz-icon">📄</div>
+        <div class="dz-hint">renewables_forecast_daily_TODAY.csv</div>
+        <div class="dz-fname" id="fn-dToday"></div>
+        <div class="dz-browse">Click to browse</div>
+      </div>
+    </div>
+    <div class="upload-card">
+      <div class="card-label"><span class="yest">Yesterday</span> — Daily CSV</div>
+      <div class="drop-zone" id="dz-dYest">
+        <div class="dz-icon">📄</div>
+        <div class="dz-hint">renewables_forecast_daily_YESTERDAY.csv</div>
+        <div class="dz-fname" id="fn-dYest"></div>
+        <div class="dz-browse">Click to browse</div>
+      </div>
+    </div>
+    <div class="upload-card">
+      <div class="card-label"><span class="today">Today</span> — Half-Hourly CSV</div>
+      <div class="drop-zone" id="dz-hhToday">
+        <div class="dz-icon">📄</div>
+        <div class="dz-hint">renewables_forecast_halfhourly_TODAY.csv</div>
+        <div class="dz-fname" id="fn-hhToday"></div>
+        <div class="dz-browse">Click to browse</div>
+      </div>
+    </div>
+    <div class="upload-card">
+      <div class="card-label"><span class="yest">Yesterday</span> — Half-Hourly CSV</div>
+      <div class="drop-zone" id="dz-hhYest">
+        <div class="dz-icon">📄</div>
+        <div class="dz-hint">renewables_forecast_halfhourly_YESTERDAY.csv</div>
+        <div class="dz-fname" id="fn-hhYest"></div>
+        <div class="dz-browse">Click to browse</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-generate" id="genBtn" disabled onclick="generate()">Generate Tables</button>
+    <div class="status-msg" id="statusMsg"></div>
+  </div>
+
+  <!-- Temperatures: Summer + Winter side by side, each with own clipboard button -->
+  <div class="output-wrapper" id="wrapTemp">
+    <div class="section-toolbar">
+      <span class="section-label">Temperatures</span>
+    </div>
+    <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:0.72rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#94a3b8;">Summer</span>
+          <button class="btn-action" onclick="copyEl('tblSummer')">Copy to Clipboard</button>
+        </div>
+        <div id="tblSummer"></div>
+      </div>
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:0.72rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#94a3b8;">Winter</span>
+          <button class="btn-action" onclick="copyEl('tblWinter')">Copy to Clipboard</button>
+        </div>
+        <div id="tblWinter"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7-day renewables -->
+  <div class="output-wrapper" id="wrap7" style="margin-top:16px;">
+    <div class="section-toolbar">
+      <span class="section-label">Wind &amp; Solar — 7 Day</span>
+      <button class="btn-action" onclick="copySection('wrap7')">Copy to Clipboard</button>
+    </div>
+    <div id="tbl7" style="display:flex;gap:28px;flex-wrap:wrap;"></div>
+  </div>
+
+  <!-- 13-day renewables -->
+  <div class="output-wrapper" id="wrap13" style="margin-top:16px;">
+    <div class="section-toolbar">
+      <span class="section-label">Wind &amp; Solar — 13 Day</span>
+      <button class="btn-action" onclick="copySection('wrap13')">Copy to Clipboard</button>
+    </div>
+    <div id="tbl13" style="display:flex;gap:28px;flex-wrap:wrap;"></div>
+  </div>
+
+  <!-- Lightning Risk -->
+  <div class="output-wrapper visible" id="wrapLightning" style="margin-top:16px;">
+    <div class="section-toolbar">
+      <span class="section-label">Lightning Risk</span>
+      <button class="btn-action" onclick="copyEl('lightningTable')">Copy to Clipboard</button>
+    </div>
+    <div id="lightningTable">
+      <table id="ltable" style="border-collapse:collapse;font-family:Calibri,'Segoe UI',Arial,sans-serif;font-size:9pt;">
+        <!-- Header -->
+        <tr>
+          <td style="border:1px solid #000;background:#d9d9d9;font-style:italic;font-weight:700;padding:3px 8px;width:90px;color:#000;">Location</td>
+          <td style="border:1px solid #000;background:#d9d9d9;font-style:italic;font-weight:700;padding:3px 8px;width:90px;text-align:center;color:#000;">Today</td>
+          <td style="border:1px solid #000;background:#d9d9d9;font-style:italic;font-weight:700;padding:3px 8px;width:90px;text-align:center;color:#000;">Tomorrow</td>
+          <td style="border:1px solid #000;background:#d9d9d9;font-style:italic;font-weight:400;padding:3px 8px;width:520px;text-align:center;color:#000;">Details</td>
+          <td style="border:none;padding:0 0 0 24px;" colspan="5">
+            <!-- Table key -->
+            <table style="border-collapse:collapse;font-family:Calibri,'Segoe UI',Arial,sans-serif;font-size:8.5pt;">
+              <tr>
+                <td style="padding:2px 8px;color:#555;font-style:italic;">Table Key:</td>
+                <td style="border:1px solid #000;background:#ffffff;padding:2px 10px;font-style:italic;font-weight:700;color:black;">Min <span style="font-weight:400;font-style:normal;">(&lt;10%)</span></td>
+                <td style="border:1px solid #000;background:#ffff00;padding:2px 10px;font-style:italic;font-weight:700;color:black;">Low <span style="font-weight:400;font-style:normal;">(10 to 40%)</span></td>
+                <td style="border:1px solid #000;background:#ffc000;padding:2px 10px;font-style:italic;font-weight:700;color:black;">Mod <span style="font-weight:400;font-style:normal;">(40 to 60%)</span></td>
+                <td style="border:1px solid #000;background:#ff0000;color:black;padding:2px 10px;font-style:italic;font-weight:700;">High <span style="font-weight:400;font-style:normal;">(60 to 100%)</span></td>
+              </tr>
+              <tr>
+                <td style="padding:2px 8px;"></td>
+                <td style="border:1px solid #000;background:#ffffff;padding:2px 10px;font-style:italic;font-weight:700;color:black;text-align:center;">Min</td>
+                <td style="border:1px solid #000;background:#ffff00;padding:2px 10px;font-style:italic;font-weight:700;color:black;text-align:center;">Low</td>
+                <td style="border:1px solid #000;background:#ffc000;padding:2px 10px;font-style:italic;font-weight:700;color:black;text-align:center;">Mod</td>
+                <td style="border:1px solid #000;background:#ff0000;padding:2px 10px;font-style:italic;font-weight:700;color:black;text-align:center;">High</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Data rows built by JS -->
+      <div id="lrows"></div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────
+const csvData = { dToday:null, dYest:null, hhToday:null, hhYest:null };
+
+// ── Drop zone wiring ───────────────────────────────────────────────────
+// Key insight: file inputs are OUTSIDE the drop zones entirely.
+// Drop zones are plain divs that handle drag events directly.
+// Clicks on the zone programmatically open the hidden file input.
+
+const zones = [
+  { key:'dToday',  dzId:'dz-dToday',  inpId:'inp-dToday',  fnId:'fn-dToday'  },
+  { key:'dYest',   dzId:'dz-dYest',   inpId:'inp-dYest',   fnId:'fn-dYest'   },
+  { key:'hhToday', dzId:'dz-hhToday', inpId:'inp-hhToday', fnId:'fn-hhToday' },
+  { key:'hhYest',  dzId:'dz-hhYest',  inpId:'inp-hhYest',  fnId:'fn-hhYest'  },
+];
+
+zones.forEach(({ key, dzId, inpId, fnId }) => {
+  const dz  = document.getElementById(dzId);
+  const inp = document.getElementById(inpId);
+  const fn  = document.getElementById(fnId);
+
+  function loadFile(file) {
+    if (!file || !file.name.endsWith('.csv')) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      csvData[key] = e.target.result;
+      dz.classList.add('loaded');
+      fn.textContent = file.name;
+      checkReady();
+    };
+    reader.readAsText(file);
+  }
+
+  // Click zone → open file picker
+  dz.addEventListener('click', () => inp.click());
+
+  // File picker change
+  inp.addEventListener('change', () => {
+    if (inp.files[0]) loadFile(inp.files[0]);
+  });
+
+  // Drag over — must preventDefault to allow drop
+  dz.addEventListener('dragenter', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', e => {
+    // Only remove if leaving the zone itself (not a child)
+    if (!dz.contains(e.relatedTarget)) dz.classList.remove('drag-over');
+  });
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    loadFile(file);
+  });
+});
+
+function checkReady() {
+  document.getElementById('genBtn').disabled =
+    !(csvData.dToday && csvData.dYest && csvData.hhToday);
+}
+
+// Prevent browser default drop behaviour on the whole page
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop',     e => e.preventDefault());
+
+// ── Climatology ────────────────────────────────────────────────────────
+const CLIMO_URL = 'https://raw.githubusercontent.com/2manytims/nem-temp-table/main/monthly_climatology_10yr.csv';
+let climoData = null;
+(async () => {
+  try {
+    const res = await fetch(CLIMO_URL);
+    if (res.ok) climoData = parseClimoCSV(await res.text());
+  } catch(e) { console.warn('Climo fetch failed'); }
+})();
+
+const CLIMO_FALLBACK = {
+  'Adelaide WT':  { tmax:24, tmin:11, tin10:29, td:9,  cdd:2, edd:3   },
+  'Melbourne OP': { tmax:21, tmin:10, tin10:27, td:9,  cdd:1, edd:4   },
+  'Bankstown':    { tmax:25, tmin:11, tin10:28, td:13, cdd:2, edd:3   },
+  'Archerfield':  { tmax:28, tmin:14, tin10:30, td:15, cdd:4, edd:'-' },
+};
+
+// ── Column mappings ────────────────────────────────────────────────────
+const DAILY_COLS = {
+  'Adelaide WT':  { tmin:1,  tmax:2,  tmax90:3  },
+  'Melbourne OP': { tmin:7,  tmax:8,  tmax90:9  },
+  'Bankstown':    { tmin:13, tmax:14, tmax90:15 },
+  'Archerfield':  { tmin:28, tmax:29, tmax90:30 },
+};
+const EDD_COLS = {
+  'Adelaide WT':'Adelaide WT_EDD','Melbourne OP':'Melbourne_EDD',
+  'Bankstown':'Bankstown_EDD','Archerfield':'Archerfield_EDD',
+};
+const WIND_COLS  = { SA:'SA_WindPowerAvg',  VIC:'VIC_WindPowerAvg',  NSW:'NSW_WindPowerAvg',  QLD:'QLD_WindPowerAvg'  };
+const SOLAR_COLS = { SA:'SA_SolarPowerMax', VIC:'VIC_SolarPowerMax', NSW:'NSW_SolarPowerMax', QLD:'QLD_SolarPowerMax' };
+const TEMP_CITIES   = ['Adelaide WT','Melbourne OP','Bankstown','Archerfield'];
+const RENEW_REGIONS = ['SA','VIC','NSW','QLD'];
+const HH_COLS = {
+  'Adelaide WT':  {tt:1, dpd:2}, 'Melbourne OP': {tt:5, dpd:6},
+  'Bankstown':    {tt:9, dpd:10},'Archerfield':  {tt:19,dpd:20},
+};
+const TD_SCALE = {
+  'Adelaide WT':  {min:15,max:25},'Melbourne OP': {min:15,max:25},
+  'Bankstown':    {min:20,max:30},'Archerfield':  {min:20,max:30},
+};
+
+// ── CSV parser ─────────────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = splitLine(lines[0]);
+  return lines.slice(1).filter(l=>l.trim()).map(l=>{
+    const vals=splitLine(l), obj={};
+    headers.forEach((h,i)=>obj[h.trim()]=(vals[i]||'').trim());
+    return obj;
+  });
+}
+function splitLine(line) {
+  const res=[]; let cur='',inQ=false;
+  for(const ch of line){
+    if(ch==='"') inQ=!inQ;
+    else if(ch===','&&!inQ){res.push(cur);cur='';}
+    else cur+=ch;
+  }
+  res.push(cur); return res;
+}
+
+// ── Date helpers ───────────────────────────────────────────────────────
+function parseDMY(str){const[dp]=str.trim().split(' ');const[d,m,y]=dp.split('/').map(Number);return new Date(y,m-1,d);}
+function dateSerial(date){return Math.round((date-new Date(1899,11,30))/86400000);}
+function formatDate(str){
+  const d=parseDMY(str);
+  return `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]} ${String(d.getDate()).padStart(2,'0')} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// ── Half-hourly ────────────────────────────────────────────────────────
+function buildHHLookup(rows){
+  const map=new Map();
+  for(const row of rows){
+    const dtStr=row['DateTime (AEST)']; if(!dtStr) continue;
+    const[dp,tp]=dtStr.trim().split(' ');
+    const[d,mo,y]=dp.split('/').map(Number);
+    const serial=dateSerial(new Date(y,mo-1,d));
+    const[h,m]=(tp||'00:00').split(':').map(Number);
+    map.set(Math.round((serial+(h*60+m)/1440)*10000)/10000,row);
+  }
+  return map;
+}
+function hhKey(s,h,m){return Math.round((s+(h*60+m)/1440)*10000)/10000;}
+function getHHVal(lk,key,ci){
+  const row=lk.get(key); if(!row)return null;
+  const v=Object.values(row)[ci];
+  return(!v||v==='*')?null:parseFloat(v);
+}
+
+// ── Calculations ───────────────────────────────────────────────────────
+function r1(v){return Math.round(v*10)/10;}
+function calcT6pm(tmax,serial,lk,city){
+  const c=HH_COLS[city];
+  const w=[17.5,18,18.5].map(h=>{const hh=Math.floor(h),mm=(h%1)*60;return getHHVal(lk,hhKey(serial,hh,mm),c.tt);}).filter(v=>v!==null);
+  const all=[];
+  for(let h=0;h<24;h++)for(const m of[0,30]){const v=getHHVal(lk,hhKey(serial,h,m),c.tt);if(v!==null)all.push(v);}
+  if(!w.length||!all.length)return tmax;
+  const v6=getHHVal(lk,hhKey(serial,18,0),c.tt);
+  if(Math.max(...w)===Math.max(...all))return tmax;
+  if(v6!==null&&Math.round(v6)>tmax)return tmax-0.5;
+  return v6!==null?r1(v6):tmax;
+}
+function calcTd(serial,lk,city){
+  const c=HH_COLS[city];
+  const vals=[14,15,16].map(h=>{const tt=getHHVal(lk,hhKey(serial,h,0),c.tt);const dpd=getHHVal(lk,hhKey(serial,h,0),c.dpd);return(tt!==null&&dpd!==null)?tt-dpd:null;}).filter(v=>v!==null);
+  return vals.length?r1(vals.reduce((a,b)=>a+b,0)/vals.length):null;
+}
+function calcCDD(tmin,tmax){const v=(tmin+tmax)/2-18;return v<=0.5?'-':r1(v);}
+
+// ── Colour helpers ─────────────────────────────────────────────────────
+function lerp(c1,c2,t){
+  t=Math.max(0,Math.min(1,t));
+  const p=s=>[parseInt(s.slice(1,3),16),parseInt(s.slice(3,5),16),parseInt(s.slice(5,7),16)];
+  const[r1,g1,b1]=p(c1),[r2,g2,b2]=p(c2);
+  return `rgb(${Math.round(r1+(r2-r1)*t)},${Math.round(g1+(g2-g1)*t)},${Math.round(b1+(b2-b1)*t)})`;
+}
+// Summer Tmax: white(32)→yellow(35)→red(45)
+function tempBg(v){
+  if(typeof v!=='number'||v<=32)return '';
+  if(v<=35)return lerp('#ffffff','#ffff00',(v-32)/3);
+  return lerp('#ffff00','#ff6666',(v-35)/10);
+}
+// Td: white→green
+function tdBg(v,city){
+  if(typeof v!=='number')return '';
+  const{min,max}=TD_SCALE[city]; if(v<=min)return '';
+  return lerp('#ffffff','#63be7b',Math.min(1,(v-min)/(max-min)));
+}
+// Wind: white(22.5)→green(100)
+function windBg(v){
+  if(typeof v!=='number'||v<=22.5)return '';
+  return lerp('#ffffff','#63be7b',Math.min(1,(v-22.5)/(100-22.5)));
+}
+// Solar: grey→orange→gold
+function solarBg(v,mx){
+  if(typeof v!=='number'||v<=0)return '';
+  const mid=mx/2;
+  return v<=mid?lerp('#c0c0c0','#ffcc66',Math.min(1,v/mid)):lerp('#ffcc66','#ffc000',Math.min(1,(v-mid)/(100-mid)));
+}
+// Winter Tmin: yellow(0)→white(5) — only triggers for very cold nights
+function tminWBg(v){
+  if(typeof v!=='number'||v>=5)return '';
+  return v<=0?'#ffff00':lerp('#ffff00','#ffffff',v/5);
+}
+// Winter Tmax: yellow(10)→white(15) — cold daytime max
+function tmaxWBg(v){
+  if(typeof v!=='number'||v>=15)return '';
+  return v<=10?'#ffff00':lerp('#ffff00','#ffffff',(v-10)/5);
+}
+// Winter EDD: white(11.5)→purple(15) — high heating demand days
+function eddWBg(v){
+  if(typeof v!=='number'||isNaN(v)||v<=11.5)return '';
+  return lerp('#ffffff','#9b59b6',Math.min(1,(v-11.5)/3.5));
+}
+
+// ── Climatology parser ─────────────────────────────────────────────────
+const CMAP={Adelaide:'Adelaide WT',Melbourne:'Melbourne OP',Bankstown:'Bankstown',Archerfield:'Archerfield'};
+function parseClimoCSV(text){
+  const lines=text.trim().split('\n').map(l=>splitLine(l).map(v=>v.trim()));
+  let hi=-1,mc=[],mo=0,nc=[],rp='';
+  const MN=['january','february','march','april','may','june','july','august','september','october','november','december'];
+  for(let i=0;i<lines.length;i++){
+    const r=lines[i];
+    if(r[0].toLowerCase()==='month'&&r[1]&&hi===-1){
+      hi=i;mc=r.slice(1,5).filter(Boolean);
+      for(let c=5;c<r.length;c++)if(r[c].toLowerCase()==='month'){mo=c;nc=r.slice(c+1,c+5).filter(Boolean);break;}
+    }
+    if(r[0].toLowerCase().startsWith('record'))rp=r[1]||'';
+  }
+  if(hi===-1)return null;
+  const res={byMonth:{},recordPeriod:rp};
+  for(let i=hi+1;i<lines.length;i++){
+    const r=lines[i],mIdx=MN.indexOf((r[0]||'').toLowerCase());
+    if(mIdx===-1)continue;
+    const entry={};
+    mc.forEach((city,j)=>{const m=CMAP[city]||city;if(!entry[m])entry[m]={};entry[m].tmax=parseFloat(r[j+1]);});
+    if(mo>0)nc.forEach((city,j)=>{const m=CMAP[city]||city;if(!entry[m])entry[m]={};entry[m].tmin=parseFloat(r[mo+j+1]);});
+    res.byMonth[mIdx]=entry;
+  }
+  return res;
+}
+function getClimo(monthIdx){
+  if(!climoData||!climoData.byMonth[monthIdx])return null;
+  const month=climoData.byMonth[monthIdx],res={};
+  for(const city of TEMP_CITIES){
+    const c=month[city]||{};
+    const tmax=isNaN(c.tmax)?CLIMO_FALLBACK[city].tmax:Math.round(c.tmax*10)/10;
+    const tmin=isNaN(c.tmin)?CLIMO_FALLBACK[city].tmin:Math.round(c.tmin*10)/10;
+    const cddVal=(c.tmin!=null&&!isNaN(c.tmax))?(c.tmin+c.tmax)/2-18:null;
+    res[city]={tmax,tmin,cdd:(cddVal===null||cddVal<=0.5)?'-':Math.round(cddVal)};
+  }
+  return res;
+}
+
+// ── Summer table ───────────────────────────────────────────────────────
+function buildSummer(todayRows,yesterdayRows,hhLookup){
+  const rows=todayRows.slice(0,-1);
+  const mIdx=rows[0]?parseDMY(rows[0]['Date']).getMonth():new Date().getMonth();
+  const cm=getClimo(mIdx);
+  const lbl=climoData?`Climatology (${climoData.recordPeriod||'10yr'})`:'Climatology (1991-2020)';
+  let h=`<table class="nem-table"><tr><td class="th-title" colspan="${1+TEMP_CITIES.length*6}">Summer Temperatures</td></tr>`;
+  h+=`<tr><th class="th-col td-date"></th>`;
+  TEMP_CITIES.forEach(c=>h+=`<th class="th-region" colspan="6">${c}</th>`);
+  h+=`</tr><tr><th class="th-col td-date">Date</th>`;
+  TEMP_CITIES.forEach(()=>{h+=`<th class="th-col" style="color:#c00000;font-style:italic"><em>Tmax</em></th><th class="th-col">ΔTmax</th><th class="th-col">1-in-10</th><th class="th-col">T6pm</th><th class="th-col" style="color:#375623">Td</th><th class="th-col">CDD</th>`;});
+  h+=`</tr>`;
+  for(const row of rows){
+    const vals=Object.values(row),ds=row['Date'],serial=dateSerial(parseDMY(ds));
+    h+=`<tr><td class="td-date">${formatDate(ds)}</td>`;
+    for(const city of TEMP_CITIES){
+      const cols=DAILY_COLS[city];
+      const tmin=parseFloat(vals[cols.tmin]),tmax=parseFloat(vals[cols.tmax]),tin10=parseFloat(vals[cols.tmax90]);
+      const yRow=yesterdayRows.find(r=>r['Date']===ds);
+      let delta=null;
+      if(yRow){const yv=parseFloat(Object.values(yRow)[cols.tmax]);if(!isNaN(yv)&&!isNaN(tmax))delta=r1(tmax-yv);}
+      const t6pm=calcT6pm(tmax,serial,hhLookup,city),td=calcTd(serial,hhLookup,city),cdd=calcCDD(tmin,tmax);
+      const dB=delta!==null&&Math.abs(delta)>1?'font-weight:700;':'';
+      h+=`<td class="td-tmax" style="background:${tempBg(tmax)}">${isNaN(tmax)?'—':tmax.toFixed(1)}</td>`;
+      h+=`<td style="${dB}">${delta!==null?delta.toFixed(1):'—'}</td>`;
+      h+=`<td style="background:${tempBg(tin10)}">${isNaN(tin10)?'—':Math.round(tin10)}</td>`;
+      h+=`<td style="background:${tempBg(t6pm)}">${isNaN(t6pm)?'—':Math.round(t6pm)}</td>`;
+      h+=`<td class="td-td" style="background:${td!==null?tdBg(td,city):''}">${td!==null?Math.round(td):'—'}</td>`;
+      h+=`<td>${cdd==='-'?'-':Math.round(cdd)}</td>`;
+    }
+    h+=`</tr>`;
+  }
+  h+=`<tr class="climo-row"><td class="climo-label">${lbl}</td>`;
+  for(const city of TEMP_CITIES){
+    const fb=CLIMO_FALLBACK[city],c=cm?cm[city]:null;
+    h+=`<td class="td-tmax"><em>${c?c.tmax:fb.tmax}</em></td><td></td><td>${fb.tin10}</td><td></td><td class="td-td">${fb.td}</td><td>${c?c.cdd:fb.cdd}</td>`;
+  }
+  return h+`</tr></table>`;
+}
+
+// ── Winter table ───────────────────────────────────────────────────────
+function buildWinter(todayRows,yesterdayRows){
+  const rows=todayRows.slice(0,-1);
+  const mIdx=rows[0]?parseDMY(rows[0]['Date']).getMonth():new Date().getMonth();
+  const cm=getClimo(mIdx);
+  const lbl=climoData?`Climatology (${climoData.recordPeriod||'10yr'})`:'Climatology (1991-2020)';
+  let h=`<table class="nem-table"><tr><td class="th-title" colspan="${1+TEMP_CITIES.length*5}">Winter Temperatures</td></tr>`;
+  h+=`<tr><th class="th-col td-date"></th>`;
+  TEMP_CITIES.forEach(c=>h+=`<th class="th-region" colspan="5">${c}</th>`);
+  h+=`</tr><tr><th class="th-col td-date">Date</th>`;
+  TEMP_CITIES.forEach(()=>{h+=`<th class="th-col" style="color:#c00000;font-style:italic"><em>Tmin</em></th><th class="th-col">ΔTmin</th><th class="th-col" style="color:#c00000;font-style:italic"><em>Tmax</em></th><th class="th-col">ΔTmax</th><th class="th-col">EDD</th>`;});
+  h+=`</tr>`;
+  for(const row of rows){
+    const vals=Object.values(row),ds=row['Date'];
+    h+=`<tr><td class="td-date">${formatDate(ds)}</td>`;
+    for(const city of TEMP_CITIES){
+      const cols=DAILY_COLS[city];
+      const tmin=parseFloat(vals[cols.tmin]),tmax=parseFloat(vals[cols.tmax]);
+      const eddRaw=row[EDD_COLS[city]];
+      const eddNum=(!eddRaw||eddRaw==='*'||parseFloat(eddRaw)<=0.5)?null:r1(parseFloat(eddRaw));
+      const yRow=yesterdayRows.find(r=>r['Date']===ds);
+      let dMin=null,dMax=null;
+      if(yRow){
+        const yv=Object.values(yRow);
+        const ym=parseFloat(yv[cols.tmin]),yM=parseFloat(yv[cols.tmax]);
+        if(!isNaN(ym)&&!isNaN(tmin))dMin=r1(tmin-ym);
+        if(!isNaN(yM)&&!isNaN(tmax))dMax=r1(tmax-yM);
+      }
+      const dMinB=dMin!==null&&Math.abs(dMin)>1?'font-weight:700;':'';
+      const dMaxB=dMax!==null&&Math.abs(dMax)>1?'font-weight:700;':'';
+      const tminB=!isNaN(tmin)&&tmin<=3?'font-weight:700;':'';
+      const tmaxB=!isNaN(tmax)&&tmax<=13?'font-weight:700;':'';
+      const eddB=eddNum!==null&&eddNum>12.5?'font-weight:700;':'';
+      h+=`<td class="td-tmin-w" style="background:${tminWBg(tmin)};${tminB}">${isNaN(tmin)?'—':tmin.toFixed(1)}</td>`;
+      h+=`<td style="${dMinB}">${dMin!==null?dMin.toFixed(1):'—'}</td>`;
+      h+=`<td class="td-tmax-w" style="background:${tmaxWBg(tmax)};${tmaxB}">${isNaN(tmax)?'—':tmax.toFixed(1)}</td>`;
+      h+=`<td style="${dMaxB}">${dMax!==null?dMax.toFixed(1):'—'}</td>`;
+      h+=`<td style="background:${eddNum!==null?eddWBg(eddNum):''};${eddB}">${eddNum!==null?eddNum:'-'}</td>`;
+    }
+    h+=`</tr>`;
+  }
+  h+=`<tr class="climo-row"><td class="climo-label">${lbl}</td>`;
+  for(const city of TEMP_CITIES){
+    const fb=CLIMO_FALLBACK[city],c=cm?cm[city]:null;
+    h+=`<td class="td-tmin-w"><em>${c?c.tmin:fb.tmin}</em></td><td></td><td class="td-tmax-w"><em>${c?c.tmax:fb.tmax}</em></td><td></td><td>${fb.edd}</td>`;
+  }
+  return h+`</tr></table>`;
+}
+
+// ── Renewables ─────────────────────────────────────────────────────────
+function buildRenew(todayRows,yesterdayRows,nDays){
+  const vr=todayRows.filter(r=>{const v=r[WIND_COLS.SA];return v&&v!=='*'&&!isNaN(parseFloat(v));}).slice(0,nDays);
+  let mx=0;
+  vr.forEach(row=>Object.values(SOLAR_COLS).forEach(col=>{const v=parseFloat(row[col]);if(!isNaN(v)&&v>mx)mx=v;}));
+
+  const mkTable=(title,cols,cls,bgFn,deltaFn)=>{
+    let h=`<table class="nem-table"><tr><td class="th-title" colspan="${1+RENEW_REGIONS.length*2}">${title}</td></tr>`;
+    h+=`<tr><th class="th-col td-date"></th>`;
+    RENEW_REGIONS.forEach(r=>h+=`<th class="th-region" colspan="2">${r}</th>`);
+    h+=`</tr><tr><th class="th-col td-date">Date</th>`;
+    RENEW_REGIONS.forEach(()=>h+=`<th class="th-col ${cls}">Daily<br>${title.includes('Wind')?'Avg':'Max'}</th><th class="th-col" style="font-size:7.5pt;color:${cls.includes('wind')?'#375623':'#c55a11'}">Δ</th>`);
+    h+=`</tr>`;
+    vr.forEach(row=>{
+      const ds=row['Date'],yRow=yesterdayRows.find(r=>r['Date']===ds);
+      h+=`<tr><td class="td-date">${formatDate(ds)}</td>`;
+      RENEW_REGIONS.forEach(region=>{
+        const col=cols[region],v=parseFloat(row[col]);
+        let delta=null;
+        if(yRow){const yv=parseFloat(yRow[col]);if(!isNaN(yv)&&!isNaN(v))delta=Math.round(v-yv);}
+        const bold=delta!==null&&Math.abs(delta)>=0.5?'font-weight:700;':'';
+        h+=`<td class="${cls}" style="background:${bgFn(v)}">${isNaN(v)?'—':Math.round(v)+'%'}</td>`;
+        h+=`<td style="${bold}">${delta!==null?(delta>=0?'+':'')+delta+'%':'—'}</td>`;
+      });
+      h+=`</tr>`;
+    });
+    return h+`</table>`;
+  };
+
+  return {
+    wind:`<div style="display:inline-block;vertical-align:top;">${mkTable('Wind Power',WIND_COLS,'td-wind',windBg)}</div>`,
+    solar:`<div style="display:inline-block;vertical-align:top;">${mkTable('Solar PV Power',SOLAR_COLS,'td-solar',v=>solarBg(v,mx))}</div>`,
+  };
+}
+
+// ── Generate ───────────────────────────────────────────────────────────
+function generate(){
+  const msg=document.getElementById('statusMsg');
+  msg.className='status-msg';
+  try{
+    const dT=parseCSV(csvData.dToday),dY=parseCSV(csvData.dYest);
+    const hT=parseCSV(csvData.hhToday),lk=buildHHLookup(hT);
+    const r7=buildRenew(dT,dY,7),r13=buildRenew(dT,dY,13);
+    document.getElementById('tblSummer').innerHTML=buildSummer(dT,dY,lk);
+    document.getElementById('tblWinter').innerHTML=buildWinter(dT,dY);
+    document.getElementById('tbl7').innerHTML=r7.wind+r7.solar;
+    document.getElementById('tbl13').innerHTML=r13.wind+r13.solar;
+    ['wrapTemp','wrap7','wrap13'].forEach(id=>document.getElementById(id).classList.add('visible'));
+    msg.className='status-msg success';
+    msg.textContent=`✓ Tables generated — ${dT.length-1} rows`;
+    document.getElementById('wrapTemp').scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(err){
+    msg.className='status-msg error';
+    msg.textContent='✗ '+err.message;
+    console.error(err);
+  }
+}
+
+// ── Lightning Risk Table ───────────────────────────────────────────────
+const LIGHTNING_LOCS = ['QNI','Heywood','Brisbane','Sydney','Melbourne','Adelaide'];
+const RISK_LEVELS    = ['Min','Low','Mod','High'];
+const RISK_CLASS     = { Min:'risk-min', Low:'risk-low', Mod:'risk-mod', High:'risk-high' };
+
+function buildLightningTable() {
+  const container = document.getElementById('lrows');
+  const table = document.getElementById('ltable');
+
+  LIGHTNING_LOCS.forEach(loc => {
+    const tr = document.createElement('tr');
+    tr.className = 'lt-row';
+
+    // Location cell
+    const tdLoc = document.createElement('td');
+    tdLoc.className = 'lt-loc';
+    tdLoc.textContent = loc;
+    tr.appendChild(tdLoc);
+
+    // Today + Tomorrow dropdowns
+    ['today','tomorrow'].forEach(day => {
+      const tdRisk = document.createElement('td');
+      tdRisk.className = `lt-risk risk-min`;
+      tdRisk.dataset.loc = loc;
+      tdRisk.dataset.day = day;
+
+      const span = document.createElement('span');
+      span.textContent = 'Min';
+      tdRisk.appendChild(span);
+
+      const sel = document.createElement('select');
+      RISK_LEVELS.forEach(level => {
+        const opt = document.createElement('option');
+        opt.value = level;
+        opt.textContent = level;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener('change', () => {
+        const level = sel.value;
+        tdRisk.className = `lt-risk ${RISK_CLASS[level]}`;
+        span.textContent = level;
+      });
+      tdRisk.appendChild(sel);
+      tr.appendChild(tdRisk);
+    });
+
+    // Details free text
+    const tdDetail = document.createElement('td');
+    tdDetail.className = 'lt-detail';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.placeholder = 'Free text…';
+    tdDetail.appendChild(inp);
+    tr.appendChild(tdDetail);
+
+    // Empty key cells (spacer)
+    const tdSpacer = document.createElement('td');
+    tdSpacer.style.border = 'none';
+    tr.appendChild(tdSpacer);
+
+    table.appendChild(tr);
+  });
+}
+buildLightningTable();
+
+
+async function copyEl(elId){
+  const btn=event.target;
+  btn.textContent='⏳ Copying…'; btn.disabled=true;
+  try{
+    const el=document.getElementById(elId);
+    const shell=document.createElement('div');
+    shell.style.cssText='position:fixed;left:-9999px;display:inline-block;padding:20px;background:white;';
+    shell.appendChild(el.cloneNode(true));
+    document.body.appendChild(shell);
+    const canvas=await html2canvas(shell,{backgroundColor:'#ffffff',scale:2,useCORS:true,logging:false});
+    document.body.removeChild(shell);
+    canvas.toBlob(async blob=>{
+      try{
+        await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+        btn.textContent='✓ Copied!';
+      }catch{
+        const a=document.createElement('a');
+        a.download=`${elId}_${new Date().toISOString().slice(0,10)}.png`;
+        a.href=URL.createObjectURL(blob); a.click();
+        btn.textContent='✓ Downloaded!';
+      }
+      btn.classList.add('done');
+      setTimeout(()=>{btn.textContent='Copy to Clipboard';btn.classList.remove('done');btn.disabled=false;},2000);
+    });
+  }catch(err){console.error(err);btn.textContent='Copy to Clipboard';btn.disabled=false;}
+}
+
+// ── Copy a wrapper section to clipboard ───────────────────────────────
+async function copySection(wrapperId){
+  const btn=event.target;
+  const content=document.getElementById(wrapperId).querySelector('[id^="tbl"]');
+  btn.textContent='⏳ Copying…'; btn.disabled=true;
+  try{
+    const shell=document.createElement('div');
+    shell.style.cssText='position:fixed;left:-9999px;display:inline-block;padding:20px;background:white;';
+    shell.appendChild(content.cloneNode(true));
+    document.body.appendChild(shell);
+    const canvas=await html2canvas(shell,{backgroundColor:'#ffffff',scale:2,useCORS:true,logging:false});
+    document.body.removeChild(shell);
+    canvas.toBlob(async blob=>{
+      try{
+        await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+        btn.textContent='✓ Copied!';
+      }catch{
+        const a=document.createElement('a');
+        a.download=`${wrapperId}_${new Date().toISOString().slice(0,10)}.png`;
+        a.href=URL.createObjectURL(blob); a.click();
+        btn.textContent='✓ Downloaded!';
+      }
+      btn.classList.add('done');
+      setTimeout(()=>{btn.textContent='Copy to Clipboard';btn.classList.remove('done');btn.disabled=false;},2000);
+    });
+  }catch(err){console.error(err);btn.textContent='Copy to Clipboard';btn.disabled=false;}
+}
+</script>
+</body>
+</html>
